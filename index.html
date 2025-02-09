@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>GitHub HTML 멀티플레이어 우노 게임</title>
+  <title>Firebase 모듈로 구성한 멀티플레이어 우노 게임</title>
   <style>
     body { 
       font-family: Arial, sans-serif; 
@@ -41,66 +41,104 @@
     .yellow { background-color: yellow; color: black; }
     .green { background-color: green; }
     .black { background-color: black; }
+    /* 로그 영역 스타일 */
+    #log {
+      max-width: 600px;
+      margin: 20px auto;
+      text-align: left;
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      height: 150px;
+      overflow-y: auto;
+      font-size: 14px;
+    }
   </style>
-  <!-- Firebase 라이브러리 (compat 버전) -->
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 </head>
 <body>
   <h1>멀티플레이어 우노 게임</h1>
   <div id="game-board"></div>
+  <h3>카드 플레이 로그</h3>
+  <div id="log"></div>
 
-  <script>
-    // 1. Firebase 설정 (본인의 Firebase 콘솔에서 발급받은 설정으로 대체하세요)
+  <!-- Firebase 모듈을 사용 (type="module") -->
+  <script type="module">
+    // Firebase SDK 모듈 가져오기
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-analytics.js";
+    import { getDatabase, ref, push, set, onChildAdded } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-database.js";
+
+    // Firebase 구성 (Firebase 콘솔에서 제공하는 설정 정보 사용)
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      databaseURL: "YOUR_DATABASE_URL",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyCVg8joZy6HLOLbiNUCVD9yMgOb3NDbll8",
+      authDomain: "game-uno-1.firebaseapp.com",
+      projectId: "game-uno-1",
+      storageBucket: "game-uno-1.firebasestorage.app",
+      messagingSenderId: "127524275045",
+      appId: "1:127524275045:web:21cd550e8c82ea8334978c",
+      measurementId: "G-NSRV1KM0W1"
     };
 
-    // 2. Firebase 초기화
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    // Firebase 초기화
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const database = getDatabase(app);
 
-    // 3. 게임 보드 요소 가져오기
-    const gameBoard = document.getElementById('game-board');
+    // HTML 요소 가져오기
+    const gameBoard = document.getElementById("game-board");
+    const logDiv = document.getElementById("log");
 
-    // 4. 카드 요소 생성 함수
+    // 로그 추가 함수 (새로운 카드 이벤트를 로그 영역에 표시)
+    function appendLog(message) {
+      const p = document.createElement("p");
+      p.textContent = message;
+      logDiv.appendChild(p);
+      logDiv.scrollTop = logDiv.scrollHeight; // 스크롤을 항상 최신 로그로 이동
+    }
+
+    // 카드 요소 생성 함수
     function createCard(color, label) {
-      const card = document.createElement('div');
-      card.classList.add('card', color);
+      const card = document.createElement("div");
+      card.classList.add("card", color);
       card.textContent = label;
-      card.addEventListener('click', () => {
-        // 카드 클릭 시 Firebase에 플레이 이벤트 기록
-        const newPlayRef = database.ref('cardPlayed').push();
-        newPlayRef.set({ color, label, timestamp: Date.now() });
+      card.addEventListener("click", () => {
+        // 카드 클릭 시 데이터 생성
+        const cardData = { color, label, timestamp: Date.now() };
+        // Realtime Database의 'cardPlayed' 경로에 새로운 카드 플레이 기록 추가
+        const cardPlayedRef = ref(database, "cardPlayed");
+        const newCardRef = push(cardPlayedRef);
+        set(newCardRef, cardData)
+          .then(() => {
+            console.log("카드 플레이 기록 성공:", cardData);
+            appendLog(`내가 플레이: ${label} (${color})`);
+          })
+          .catch((error) => {
+            console.error("카드 플레이 기록 에러:", error);
+          });
       });
       return card;
     }
 
-    // 5. 기본 카드 구성 (빨강, 파랑, 노랑, 초록)
-    const colors = ['red', 'blue', 'yellow', 'green'];
-    colors.forEach(color => {
-      // 여기서는 각 색상당 하나의 카드 예제로 구성합니다.
+    // 기본 카드 구성: 빨강, 파랑, 노랑, 초록 카드
+    const colors = ["red", "blue", "yellow", "green"];
+    colors.forEach((color) => {
+      // 각 색상의 카드(예제에서는 색상 이름을 대문자로 표시)
       const card = createCard(color, color.toUpperCase());
       gameBoard.appendChild(card);
     });
 
-    // 6. 색상 변경 카드 (검정색)
-    const wildCard = createCard('black', 'Wild');
+    // 와일드 카드 (색상 변경 카드, 검정색)
+    const wildCard = createCard("black", "Wild");
     gameBoard.appendChild(wildCard);
 
-    // 7. Firebase로부터 다른 사용자의 카드 플레이 이벤트 수신
-    const cardPlayedRef = database.ref('cardPlayed');
-    cardPlayedRef.on('child_added', snapshot => {
+    // 다른 사용자의 카드 플레이 이벤트 수신
+    const cardPlayedRef = ref(database, "cardPlayed");
+    onChildAdded(cardPlayedRef, (snapshot) => {
       const data = snapshot.val();
-      console.log('플레이된 카드:', data);
-      // 이곳에서 실제 게임 로직에 맞춰 UI 업데이트나 게임 상태 변경 등을 구현할 수 있습니다.
-      // 예를 들어, 각 카드 플레이 기록을 화면의 별도 영역에 표시할 수 있습니다.
+      console.log("새로운 카드 플레이:", data);
+      // 자신이 보낸 이벤트와 중복되지 않도록 로직 추가 가능 (현재는 단순 로그 출력)
+      appendLog(`플레이됨: ${data.label} (${data.color})`);
     });
   </script>
 </body>
